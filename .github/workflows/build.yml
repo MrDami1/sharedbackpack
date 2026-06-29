@@ -15,43 +15,23 @@ jobs:
         with:
           java-version: '25'
           distribution: 'temurin'
-          java-package: 'jdk'
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.4.0'
 
       - name: Create project structure
         run: |
           mkdir -p src/main/java/de/damyx/sharedbackpack
           mkdir -p src/main/resources
 
-      - name: Write fabric.mod.json
+      - name: Write files
         run: |
           cat > src/main/resources/fabric.mod.json << 'EOF'
-          {
-            "schemaVersion": 1,
-            "id": "sharedbackpack",
-            "version": "1.0.0",
-            "name": "Shared Backpack",
-            "description": "Shared backpack for all players. Open with /bp or /backpack.",
-            "authors": ["Damyx"],
-            "license": "MIT",
-            "environment": "*",
-            "entrypoints": {
-              "main": ["de.damyx.sharedbackpack.SharedBackpackMod"]
-            },
-            "mixins": [],
-            "depends": {
-              "fabricloader": ">=0.19.3",
-              "minecraft": "26.1",
-              "java": ">=21",
-              "fabric-api": "*"
-            }
-          }
+          {"schemaVersion":1,"id":"sharedbackpack","version":"1.0.0","name":"Shared Backpack","description":"Shared backpack for all players. Open with /bp or /backpack.","authors":["Damyx"],"license":"MIT","environment":"*","entrypoints":{"main":["de.damyx.sharedbackpack.SharedBackpackMod"]},"mixins":[],"depends":{"fabricloader":">=0.19.3","minecraft":"26.1","java":">=25","fabric-api":"*"}}
           EOF
 
-      - name: Write SharedBackpackMod.java
-        run: |
           cat > src/main/java/de/damyx/sharedbackpack/SharedBackpackMod.java << 'EOF'
           package de.damyx.sharedbackpack;
           import net.fabricmc.api.ModInitializer;
@@ -60,15 +40,12 @@ jobs:
           import org.slf4j.Logger;
           import org.slf4j.LoggerFactory;
           public class SharedBackpackMod implements ModInitializer {
-              public static final String MOD_ID = "sharedbackpack";
-              public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
+              public static final Logger LOGGER = LoggerFactory.getLogger("sharedbackpack");
               private static SharedBackpackInventory sharedInventory = null;
               @Override
               public void onInitialize() {
                   LOGGER.info("[SharedBackpack] Loaded! Use /bp or /backpack.");
-                  CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
-                      BackpackCommand.register(dispatcher)
-                  );
+                  CommandRegistrationCallback.EVENT.register((d,r,e) -> BackpackCommand.register(d));
               }
               public static SharedBackpackInventory getSharedInventory(MinecraftServer server) {
                   if (sharedInventory == null) sharedInventory = new SharedBackpackInventory(server);
@@ -77,8 +54,6 @@ jobs:
           }
           EOF
 
-      - name: Write SharedBackpackInventory.java
-        run: |
           cat > src/main/java/de/damyx/sharedbackpack/SharedBackpackInventory.java << 'EOF'
           package de.damyx.sharedbackpack;
           import net.minecraft.entity.player.PlayerEntity;
@@ -86,29 +61,19 @@ jobs:
           import net.minecraft.server.MinecraftServer;
           import net.minecraft.server.network.ServerPlayerEntity;
           public class SharedBackpackInventory extends SimpleInventory {
-              public static final int SIZE = 54;
               private final MinecraftServer server;
-              public SharedBackpackInventory(MinecraftServer server) {
-                  super(SIZE);
-                  this.server = server;
-              }
+              public SharedBackpackInventory(MinecraftServer server) { super(54); this.server = server; }
               @Override
               public void markDirty() {
                   super.markDirty();
                   if (server == null) return;
-                  for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
-                      if (player.currentScreenHandler instanceof SharedBackpackScreenHandler handler) {
-                          handler.sendContentUpdates();
-                      }
-                  }
+                  for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList())
+                      if (p.currentScreenHandler instanceof SharedBackpackScreenHandler h) h.sendContentUpdates();
               }
-              @Override
-              public boolean canPlayerUse(PlayerEntity player) { return true; }
+              @Override public boolean canPlayerUse(PlayerEntity player) { return true; }
           }
           EOF
 
-      - name: Write SharedBackpackScreenHandler.java
-        run: |
           cat > src/main/java/de/damyx/sharedbackpack/SharedBackpackScreenHandler.java << 'EOF'
           package de.damyx.sharedbackpack;
           import net.minecraft.entity.player.PlayerEntity;
@@ -118,27 +83,23 @@ jobs:
           import net.minecraft.screen.ScreenHandlerType;
           public class SharedBackpackScreenHandler extends GenericContainerScreenHandler {
               private final SharedBackpackInventory backpackInventory;
-              public SharedBackpackScreenHandler(int syncId, PlayerInventory playerInventory, SharedBackpackInventory backpackInventory) {
-                  super(ScreenHandlerType.GENERIC_9X6, syncId, playerInventory, backpackInventory, 6);
-                  this.backpackInventory = backpackInventory;
-                  backpackInventory.onOpen(playerInventory.player);
+              public SharedBackpackScreenHandler(int id, PlayerInventory pi, SharedBackpackInventory inv) {
+                  super(ScreenHandlerType.GENERIC_9X6, id, pi, inv, 6);
+                  this.backpackInventory = inv;
+                  inv.onOpen(pi.player);
               }
-              public SharedBackpackScreenHandler(int syncId, PlayerInventory playerInventory, Inventory inventory) {
-                  super(ScreenHandlerType.GENERIC_9X6, syncId, playerInventory, inventory, 6);
+              public SharedBackpackScreenHandler(int id, PlayerInventory pi, Inventory inv) {
+                  super(ScreenHandlerType.GENERIC_9X6, id, pi, inv, 6);
                   this.backpackInventory = null;
               }
-              @Override
-              public boolean canUse(PlayerEntity player) { return true; }
-              @Override
-              public void onClosed(PlayerEntity player) {
-                  super.onClosed(player);
-                  if (backpackInventory != null) backpackInventory.onClose(player);
+              @Override public boolean canUse(PlayerEntity p) { return true; }
+              @Override public void onClosed(PlayerEntity p) {
+                  super.onClosed(p);
+                  if (backpackInventory != null) backpackInventory.onClose(p);
               }
           }
           EOF
 
-      - name: Write BackpackCommand.java
-        run: |
           cat > src/main/java/de/damyx/sharedbackpack/BackpackCommand.java << 'EOF'
           package de.damyx.sharedbackpack;
           import com.mojang.brigadier.CommandDispatcher;
@@ -148,27 +109,21 @@ jobs:
           import net.minecraft.server.network.ServerPlayerEntity;
           import net.minecraft.text.Text;
           public class BackpackCommand {
-              public static void register(CommandDispatcher<ServerCommandSource> dispatcher) {
-                  dispatcher.register(CommandManager.literal("backpack").executes(ctx -> openBackpack(ctx.getSource())));
-                  dispatcher.register(CommandManager.literal("bp").executes(ctx -> openBackpack(ctx.getSource())));
+              public static void register(CommandDispatcher<ServerCommandSource> d) {
+                  d.register(CommandManager.literal("backpack").executes(c -> open(c.getSource())));
+                  d.register(CommandManager.literal("bp").executes(c -> open(c.getSource())));
               }
-              private static int openBackpack(ServerCommandSource source) {
-                  if (!(source.getEntity() instanceof ServerPlayerEntity player)) {
-                      source.sendError(Text.literal("Only players can use this command!"));
-                      return 0;
-                  }
-                  SharedBackpackInventory inventory = SharedBackpackMod.getSharedInventory(source.getServer());
-                  player.openHandledScreen(new SimpleNamedScreenHandlerFactory(
-                      (syncId, playerInv, p) -> new SharedBackpackScreenHandler(syncId, playerInv, inventory),
-                      Text.literal("§6§lShared Backpack")
-                  ));
+              private static int open(ServerCommandSource src) {
+                  if (!(src.getEntity() instanceof ServerPlayerEntity p)) return 0;
+                  var inv = SharedBackpackMod.getSharedInventory(src.getServer());
+                  p.openHandledScreen(new SimpleNamedScreenHandlerFactory(
+                      (id, pi, pl) -> new SharedBackpackScreenHandler(id, pi, inv),
+                      Text.literal("§6§lShared Backpack")));
                   return 1;
               }
           }
           EOF
 
-      - name: Write settings.gradle
-        run: |
           cat > settings.gradle << 'EOF'
           pluginManagement {
               repositories {
@@ -180,38 +135,31 @@ jobs:
           rootProject.name = 'sharedbackpack'
           EOF
 
-      - name: Write build.gradle
-        run: |
           cat > build.gradle << 'EOF'
           plugins {
-              id 'fabric-loom' version '1.10-SNAPSHOT'
-              id 'maven-publish'
+              id 'net.fabricmc.fabric-loom' version '1.15-SNAPSHOT'
           }
           version = '1.0.0'
           group = 'de.damyx'
           base { archivesName = 'sharedbackpack' }
           dependencies {
               minecraft "com.mojang:minecraft:26.1"
-              mappings loom.officialMojangMappings()
               modImplementation "net.fabricmc:fabric-loader:0.19.3"
-              modImplementation "net.fabricmc.fabric-api:fabric-api:0.153.0+26.1.2"
+              implementation "net.fabricmc.fabric-api:fabric-api:0.153.0+26.1.2"
           }
           processResources {
-              inputs.property "version", project.version
-              filesMatching("fabric.mod.json") { expand "version": project.version }
+              filesMatching("fabric.mod.json") { expand version: project.version }
           }
-          tasks.withType(JavaCompile).configureEach { it.options.release = 21 }
           java {
               sourceCompatibility = JavaVersion.VERSION_21
               targetCompatibility = JavaVersion.VERSION_21
           }
+          tasks.withType(JavaCompile).configureEach { it.options.release = 21 }
           EOF
 
-      - name: Write gradle.properties
-        run: |
           echo "org.gradle.jvmargs=-Xmx2G" > gradle.properties
 
-      - name: Build mod
+      - name: Build
         run: gradle build --no-daemon
 
       - name: Upload JAR
