@@ -19,13 +19,41 @@ jobs:
       - name: Clone Fabric Example Mod 26.1
         run: git clone --branch 26.1 https://github.com/FabricMC/fabric-example-mod.git mod
 
+      - name: Remove splitEnvironmentSourceSets from build.gradle
+        working-directory: mod
+        run: |
+          # Entferne splitEnvironmentSourceSets und den mods Block komplett
+          cat > build.gradle << 'EOF'
+          plugins {
+              id 'net.fabricmc.fabric-loom' version "${loom_version}"
+              id 'maven-publish'
+          }
+          version = project.mod_version
+          group = project.maven_group
+          base { archivesName = project.archives_base_name }
+          repositories {}
+          dependencies {
+              minecraft "com.mojang:minecraft:${project.minecraft_version}"
+              implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+              implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+          }
+          processResources {
+              inputs.property "version", project.version
+              filesMatching("fabric.mod.json") { expand "version": project.version }
+          }
+          tasks.withType(JavaCompile).configureEach { it.options.release = 21 }
+          java {
+              sourceCompatibility = JavaVersion.VERSION_21
+              targetCompatibility = JavaVersion.VERSION_21
+          }
+          EOF
+
       - name: Write mod sources
         working-directory: mod
         run: |
           mkdir -p src/main/java/de/damyx/sharedbackpack
-
-          # Alle Beispieldateien entfernen
           rm -rf src/main/java/com
+          rm -rf src/client
 
           cat > src/main/java/de/damyx/sharedbackpack/SharedBackpackMod.java << 'JAVA'
           package de.damyx.sharedbackpack;
