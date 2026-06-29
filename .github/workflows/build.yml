@@ -19,10 +19,21 @@ jobs:
       - name: Clone Fabric Example Mod 26.1
         run: git clone --branch 26.1 https://github.com/FabricMC/fabric-example-mod.git mod
 
-      - name: Remove splitEnvironmentSourceSets from build.gradle
+      - name: Fix build.gradle and gradle.properties
         working-directory: mod
         run: |
-          # Entferne splitEnvironmentSourceSets und den mods Block komplett
+          cat > gradle.properties << 'EOF'
+          org.gradle.jvmargs=-Xmx2G
+          org.gradle.configuration-cache=false
+          minecraft_version=26.1
+          loader_version=0.18.5
+          loom_version=1.15-SNAPSHOT
+          mod_version=1.0.0
+          maven_group=de.damyx
+          archives_base_name=sharedbackpack
+          fabric_version=0.153.0+26.1.2
+          EOF
+
           cat > build.gradle << 'EOF'
           plugins {
               id 'net.fabricmc.fabric-loom' version "${loom_version}"
